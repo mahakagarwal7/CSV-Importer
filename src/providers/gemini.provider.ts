@@ -18,7 +18,7 @@ export class GeminiProvider implements AIProvider {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-pro',
+        model: env.GEMINI_MODEL,
         contents: [
           { role: 'user', parts: [{ text: userPrompt }] }
         ],
