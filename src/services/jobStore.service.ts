@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 export type JobStatus = 'processing' | 'done' | 'failed';
 
@@ -21,7 +21,7 @@ class JobStore {
   private jobs: Map<string, Job> = new Map();
 
   createJob(totalRows: number, headers?: string[], rawRows?: Record<string, string>[]): Job {
-    const id = uuidv4();
+    const id = crypto.randomUUID();
     const job: Job = {
       id,
       status: 'processing',
