@@ -316,6 +316,9 @@
                 <p>View, search, and import customer leads across all active marketing channels.</p>
             </div>
             <div class="nav-actions">
+                <button class="btn btn-outline" onclick="toggleDarkMode()" title="Toggle Dark/Light Mode Theme">
+                    <i data-lucide="moon" style="width:16px;height:16px;"></i> Theme
+                </button>
                 <button class="btn btn-outline" onclick="openImportModal()">
                     <i data-lucide="file-spreadsheet" style="width:16px;height:16px;"></i> Lead Sources
                 </button>
@@ -697,15 +700,44 @@
             }
         }
 
+        // --- VIRTUALIZED TABLE WINDOW RENDERER (Bonus Feature for Large CSV Ingestion) ---
+        let virtualScrollHandler = null;
         function renderPreviewTable(headers, rows) {
             const thead = document.getElementById('previewHead');
             const tbody = document.getElementById('previewBody');
+            const container = tbody.closest('.table-container');
+            
             thead.innerHTML = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
             
-            const sampleRows = rows.slice(0, 15);
-            tbody.innerHTML = sampleRows.map(r => `
-                <tr>${headers.map(h => `<td>${escapeHtml(r[h] ?? '')}</td>`).join('')}</tr>
-            `).join('');
+            if (virtualScrollHandler) container.removeEventListener('scroll', virtualScrollHandler);
+            
+            const rowHeight = 42; // standard table row px height
+            const totalRows = rows.length;
+            
+            function renderWindow() {
+                const scrollTop = container.scrollTop;
+                const clientHeight = container.clientHeight || 320;
+                const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - 5);
+                const endIndex = Math.min(totalRows, Math.ceil((scrollTop + clientHeight) / rowHeight) + 5);
+                
+                const topSpacer = startIndex * rowHeight;
+                const bottomSpacer = (totalRows - endIndex) * rowHeight;
+                
+                let html = '';
+                if (topSpacer > 0) html += `<tr style="height: ${topSpacer}px; border: none;"><td colspan="${headers.length}" style="padding:0; border:none;"></td></tr>`;
+                
+                for (let i = startIndex; i < endIndex; i++) {
+                    const r = rows[i];
+                    html += `<tr>${headers.map(h => `<td>${escapeHtml(r[h] ?? '')}</td>`).join('')}</tr>`;
+                }
+                
+                if (bottomSpacer > 0) html += `<tr style="height: ${bottomSpacer}px; border: none;"><td colspan="${headers.length}" style="padding:0; border:none;"></td></tr>`;
+                tbody.innerHTML = html;
+            }
+
+            virtualScrollHandler = () => window.requestAnimationFrame(renderWindow);
+            container.addEventListener('scroll', virtualScrollHandler, { passive: true });
+            renderWindow();
         }
 
         // --- STEP 3: CONFIRM & EXECUTE AI IMPORT ---
