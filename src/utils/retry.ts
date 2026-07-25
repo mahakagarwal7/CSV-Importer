@@ -33,18 +33,33 @@ export const withRetry = async <T>(
       // unless we specifically add logic to check status codes if available.
       
       if (attempt > maxRetries) {
-        logger.error({ error, attempt }, `Max retries (${maxRetries}) reached. Failing.`);
+        logger.error({ error: error.message || error, attempt }, `Max retries (${maxRetries}) reached. Failing.`);
         throw error;
       }
 
-      logger.warn({ error, attempt, nextDelay: delay }, 'Operation failed. Retrying...');
-      
+      // Automatically inspect for Google Cloud HTTP 429 Rate Limit or Quota exhaustion
+      const errStr = String(error?.message || error?.error?.message || JSON.stringify(error)).toLowerCase();
+      let actualDelay = delay;
+      if (error?.status === 429 || errStr.includes('429') || errStr.includes('quota') || errStr.includes('resource_exhausted')) {
+        logger.warn(`[API Rate Limit 429 Detected] Google Free Tier throttling encountered on attempt ${attempt}.`);
+        // Check if error tells us how long to wait (e.g., "Please retry in 8.96s")
+        const match = errStr.match(/retry in ([\d\.]+)s/);
+        if (match && match[1]) {
+          actualDelay = Math.ceil(parseFloat(match[1]) * 1000) + 1500; // Requested wait plus 1.5s safety margin
+        } else {
+          actualDelay = Math.max(delay, 10000); // Default to 10s cooldown for 429 rate limits
+        }
+        logger.warn(`Throttling active: Waiting ${actualDelay / 1000} seconds before attempting batch retry...`);
+      } else {
+        logger.warn({ error: error.message || error, attempt, nextDelay: actualDelay }, 'Operation failed. Retrying...');
+      }
+
       if (onRetry) {
         onRetry(error, attempt);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      delay *= backoffFactor;
+      await new Promise((resolve) => setTimeout(resolve, actualDelay));
+      delay = actualDelay * backoffFactor;
     }
   }
 };

@@ -43,8 +43,8 @@ export const importCsv = async (req: Request, res: Response, next: NextFunction)
       });
     }
 
-    // Initialize job
-    const job = jobStore.createJob(rows.length);
+    // Initialize job with source data preserved for partial retry support
+    const job = jobStore.createJob(rows.length, headers, rows);
 
     // Start background processing
     const provider = new GeminiProvider();
@@ -91,6 +91,64 @@ export const getJobStatus = (req: Request, res: Response, next: NextFunction) =>
     }
 
     res.json(job);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const retryFailedJob = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const jobId = req.params.jobId as string;
+    const job = jobStore.getJob(jobId);
+
+    if (!job) {
+      return res.status(404).json({
+        error: { code: 'JOB_NOT_FOUND', message: 'Job not found' },
+      });
+    }
+
+    // Isolate only the rows that skipped due to AI processing or rate-limit failures
+    const retryableRows = (job.skipped || [])
+      .filter(item => item && item.row && String(item.reason).toLowerCase().includes('ai'))
+      .map(item => item.row);
+
+    if (retryableRows.length === 0 || !job.headers) {
+      return res.status(400).json({
+        error: { code: 'NO_RETRY_ROWS', message: 'No AI-processing failed rows available to retry for this job' },
+      });
+    }
+
+    logger.info(`Retrying ${retryableRows.length} failed rows for Job ${job.id}...`);
+
+    // Mark job back to processing state
+    const remainingSkipped = job.skipped.filter(item => !String(item.reason).toLowerCase().includes('ai'));
+    jobStore.updateJob(job.id, { status: 'processing', skipped: remainingSkipped });
+
+    const provider = new GeminiProvider();
+    const aiService = new AIExtractionService(provider);
+
+    aiService.processCsvData(job.headers, retryableRows)
+      .then((result) => {
+        const newValid = [...(job.records || []), ...result.validRecords];
+        const newSkipped = [...remainingSkipped, ...result.skippedRecords];
+        jobStore.updateJob(job.id, {
+          status: 'done',
+          records: newValid,
+          skipped: newSkipped,
+          totalImported: newValid.length,
+          totalSkipped: newSkipped.length,
+        });
+        logger.info(`Retry completed for Job ${job.id}. Total Valid: ${newValid.length} | Total Skipped: ${newSkipped.length}`);
+      })
+      .catch((error) => {
+        logger.error(`Retry execution failed for Job ${job.id}: ${error.message}`);
+        jobStore.updateJob(job.id, { status: 'failed', error: error.message });
+      });
+
+    res.json({
+      jobId: job.id,
+      message: `Retrying ${retryableRows.length} failed AI rows in background. Poll /api/csv/job/${job.id} for updates.`,
+    });
   } catch (error) {
     next(error);
   }

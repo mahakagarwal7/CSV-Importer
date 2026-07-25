@@ -1,0 +1,6 @@
+first_name,last_name,email,mobile_number,company,job_title,city,country,status,lead_source,notes
+Sarah,Connor,s.connor@cyberdyne.ai,+1 415-555-0199,Cyberdyne Systems,AI Director,San Francisco,USA,Won,Google,Interested in enterprise deployment
+Kyle,Reese,kyle.r@resistance.org,+1 415-555-0188,Resistance Labs,Security Lead,Los Angeles,USA,In Progress,Referral,Follow up next Tuesday
+Alex,Turing,alex@turing.dev,+44 20-7946-0921,Turing AI,Founder,London,UK,Won,Website,High priority customer
+Invalid Row,,,,,Missing contact info,,,,
+Miles,Dyson,m.dyson@skynet.com,+1 310-555-0177,Skynet Corp,Chief Architect,Sunnyvale,USA,In Progress,AI Direct,Requested whitepaper and API quota

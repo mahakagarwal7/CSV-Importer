@@ -30,12 +30,41 @@ export const postProcessBatch = (
     let record = aiRecords[i];
 
     try {
+      // 0. Pre-clean empty/invalid AI placeholders to null before schema parsing
+      if (record && typeof record === 'object') {
+        for (const key of Object.keys(record) as (keyof CRMRecord)[]) {
+          const val = record[key];
+          if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (trimmed === '' || /^n\/?a$/i.test(trimmed) || /^none$/i.test(trimmed) || /^null$/i.test(trimmed)) {
+              (record as any)[key] = null;
+            }
+          }
+        }
+        // Pre-validate email format: if not a valid email structure, clear to null so Skip Logic handles it cleanly
+        if (record.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(record.email).trim())) {
+          record.email = null;
+        }
+        // Pre-validate url format: if not valid URL, prepend https:// or set null
+        if (record.linkedin_profile_url) {
+          let url = String(record.linkedin_profile_url).trim();
+          if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+          try {
+            new URL(url);
+            record.linkedin_profile_url = url;
+          } catch {
+            record.linkedin_profile_url = null;
+          }
+        }
+      }
+
       // 1. Zod Validation (basic types)
       const parsed = crmRecordSchema.safeParse(record);
       if (!parsed.success) {
+        const errorDetails = parsed.error.issues ? parsed.error.issues.map(e => `${e.path.join('.') || 'field'}: ${e.message}`).join('; ') : parsed.error.message;
         result.skippedRecords.push({
           row: originalRow,
-          reason: `Zod validation failed: ${parsed.error.message}`,
+          reason: `Schema validation exception (${errorDetails})`,
         });
         continue;
       }
@@ -69,11 +98,23 @@ export const postProcessBatch = (
         }
       }
 
+      // 4b. Defensive Phone Number Sanitization (removes any AI thinking notes or conversational strings)
+      if (record.mobile_without_country_code) {
+        // Strip conversational scratchpads or non-telephone text
+        const rawPhone = record.mobile_without_country_code.replace(/(?:stone_|wait,|check_|cleaned).*$/i, '').trim();
+        const phoneMatch = rawPhone.match(/[\d\-\(\)\s\.]{4,22}/);
+        record.mobile_without_country_code = phoneMatch ? phoneMatch[0].trim() : null;
+      }
+      if (record.mobile_country_code) {
+        const codeMatch = record.mobile_country_code.match(/\+\d{1,4}/);
+        record.mobile_country_code = codeMatch ? codeMatch[0].trim() : null;
+      }
+
       // 5. Skip Rule: No email AND no mobile (defense in depth against AI hallucination)
       if (!record.email && !record.mobile_without_country_code) {
         result.skippedRecords.push({
           row: originalRow,
-          reason: 'No email or mobile found after processing',
+          reason: 'No email or mobile found (Required by CRM ingestion rules: missing primary contact vectors)',
         });
         continue;
       }

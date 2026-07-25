@@ -10,6 +10,8 @@ export interface Job {
   totalSkipped: number;
   records: any[];
   skipped: any[];
+  headers?: string[];
+  rawRows?: Record<string, string>[];
   createdAt: string;
   error?: string;
 }
@@ -18,7 +20,7 @@ export interface Job {
 class JobStore {
   private jobs: Map<string, Job> = new Map();
 
-  createJob(totalRows: number): Job {
+  createJob(totalRows: number, headers?: string[], rawRows?: Record<string, string>[]): Job {
     const id = uuidv4();
     const job: Job = {
       id,
@@ -28,6 +30,8 @@ class JobStore {
       totalSkipped: 0,
       records: [],
       skipped: [],
+      headers,
+      rawRows,
       createdAt: new Date().toISOString(),
     };
     this.jobs.set(id, job);

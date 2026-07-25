@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const crmStatusEnum = z.enum(['Won', 'Lost', 'In Progress', 'Unassigned', '']);
-export const dataSourceEnum = z.enum(['Facebook', 'Google', 'Website', 'Referral', 'Organic', '']);
+export const crmStatusEnum = z.enum(['GOOD_LEAD_FOLLOW_UP', 'DID_NOT_CONNECT', 'BAD_LEAD', 'SALE_DONE', '']);
+export const dataSourceEnum = z.enum(['leads_on_demand', 'meridian_tower', 'eden_park', 'varah_swamy', 'sarjapur_plots', '']);
 
 export const crmRecordSchema = z.object({
   first_name: z.string().nullable().default(null),

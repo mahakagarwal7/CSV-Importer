@@ -5,8 +5,8 @@ import { withRetry } from '../utils/retry';
 import { postProcessBatch, PostProcessResult } from './postProcess.service';
 import { logger } from '../utils/logger';
 
-const BATCH_SIZE = 25; // As per spec: ~20-30 rows per AI call
-const CONCURRENCY_LIMIT = 5; // Parallel API calls
+const BATCH_SIZE = 25; // ~20-30 rows per AI call
+const CONCURRENCY_LIMIT = 1; // Sequential API calls to protect Free Tier rate limits
 
 export interface ExtractionResult {
   validRecords: any[];
@@ -26,7 +26,11 @@ export class AIExtractionService {
     logger.info(`Processing ${rows.length} rows in ${batches.length} batches.`);
 
     const batchPromises = batches.map((batch, index) =>
-      this.limit(() => this.processBatch(headers, batch, index))
+      this.limit(async () => {
+        // Polite 500ms inter-batch pause to keep requests per minute below quota trigger thresholds
+        if (index > 0) await new Promise(r => setTimeout(r, 500));
+        return this.processBatch(headers, batch, index);
+      })
     );
 
     const batchResults = await Promise.all(batchPromises);
@@ -56,10 +60,10 @@ export class AIExtractionService {
       const aiResponse = await withRetry(
         () => this.aiProvider.extractRecords(headers, batchRows),
         {
-          maxRetries: 3,
-          initialDelayMs: 1000,
+          maxRetries: 6,
+          initialDelayMs: 2000,
           onRetry: (err, attempt) => {
-            logger.warn(`Batch ${batchIndex + 1} AI call failed (attempt ${attempt}): ${err.message}`);
+            logger.warn(`Batch ${batchIndex + 1} AI call failed (attempt ${attempt}): ${err.message || 'Rate Limit / Network Transient'}`);
           }
         }
       );
@@ -71,14 +75,15 @@ export class AIExtractionService {
       return processed;
 
     } catch (error: any) {
-      logger.error(`Batch ${batchIndex + 1} permanently failed: ${error.message}`);
+      const errorMsg = error?.message || String(error) || 'Unknown AI Provider error';
+      logger.error(`Batch ${batchIndex + 1} permanently failed: ${errorMsg}`);
       
       // If the whole batch fails permanently, mark all rows as skipped
       return {
         validRecords: [],
         skippedRecords: batchRows.map(row => ({
           row,
-          reason: 'AI processing failed for this batch',
+          reason: `AI processing failed: ${errorMsg}`,
         }))
       };
     }

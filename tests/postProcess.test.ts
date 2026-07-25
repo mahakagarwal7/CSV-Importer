@@ -18,7 +18,7 @@ describe('Post-Process Service', () => {
       country: null,
       industry: null,
       crm_status: 'InvalidStatus' as any, // Simulate AI hallucination
-      data_source: 'Organic',
+      data_source: 'meridian_tower',
       created_at: null,
       crm_note: null,
     }];
@@ -27,7 +27,7 @@ describe('Post-Process Service', () => {
     
     expect(result.validRecords).toHaveLength(1);
     expect(result.validRecords[0].crm_status).toBe('');
-    expect(result.validRecords[0].data_source).toBe('Organic');
+    expect(result.validRecords[0].data_source).toBe('meridian_tower');
   });
 
   it('should skip records with no email and no phone', () => {

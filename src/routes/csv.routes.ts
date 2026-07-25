@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { upload } from '../middleware/uploadLimits';
-import { parseCsv, importCsv, getJobStatus } from '../controllers/csv.controller';
+import { parseCsv, importCsv, getJobStatus, retryFailedJob } from '../controllers/csv.controller';
 
 const router = Router();
 
@@ -12,5 +12,8 @@ router.post('/import', importCsv);
 
 // Step 3: Poll job status
 router.get('/job/:jobId', getJobStatus);
+
+// Step 4: Retry only failed AI batches of an existing job (Bonus Endpoint)
+router.post('/import/retry/:jobId', retryFailedJob);
 
 export default router;
