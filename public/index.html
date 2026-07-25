@@ -736,11 +736,14 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error?.message || 'Import initiation failed');
 
-                if (data.jobId) {
+                if (data.status === 'done') {
+                    document.getElementById('jobProgressBar').style.width = "100%";
+                    document.getElementById('progressPercentage').textContent = "100%";
+                    setTimeout(() => renderFinalResult(data), 350);
+                } else if (data.jobId) {
                     activeJobId = data.jobId;
                     pollJobStatus(activeJobId);
                 } else {
-                    // Synchronous instant response for tiny files
                     renderFinalResult(data);
                 }
             } catch (err) {

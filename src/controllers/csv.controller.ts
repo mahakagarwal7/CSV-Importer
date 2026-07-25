@@ -50,6 +50,21 @@ export const importCsv = async (req: Request, res: Response, next: NextFunction)
     const provider = new GeminiProvider();
     const aiService = new AIExtractionService(provider);
 
+    // In Vercel Serverless (ephemeral runtime), execute extraction synchronously before responding to prevent container background freezing
+    if (process.env.VERCEL || process.env.SERVERLESS) {
+      logger.info(`[Serverless Mode] Executing extraction synchronously for Job ${job.id}...`);
+      const result = await aiService.processCsvData(headers, rows);
+      const updatedJob = jobStore.updateJob(job.id, {
+        status: 'done',
+        records: result.validRecords,
+        skipped: result.skippedRecords,
+        totalImported: result.validRecords.length,
+        totalSkipped: result.skippedRecords.length,
+      });
+      logger.info(`[Serverless Mode] Job ${job.id} completed synchronously.`);
+      return res.json(updatedJob);
+    }
+
     aiService.processCsvData(headers, rows)
       .then((result) => {
         jobStore.updateJob(job.id, {
