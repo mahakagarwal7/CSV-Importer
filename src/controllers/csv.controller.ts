@@ -61,8 +61,9 @@ export const importCsv = async (req: Request, res: Response, next: NextFunction)
         totalImported: result.validRecords.length,
         totalSkipped: result.skippedRecords.length,
       });
+      const completedJob = updatedJob || jobStore.getJob(job.id) || job;
       logger.info(`[Serverless Mode] Job ${job.id} completed synchronously.`);
-      return res.json(updatedJob);
+      return res.status(200).json(completedJob);
     }
 
     aiService.processCsvData(headers, rows)

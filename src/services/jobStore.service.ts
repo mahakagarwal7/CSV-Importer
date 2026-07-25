@@ -42,11 +42,14 @@ class JobStore {
     return this.jobs.get(id);
   }
 
-  updateJob(id: string, updates: Partial<Job>): void {
+  updateJob(id: string, updates: Partial<Job>): Job | undefined {
     const job = this.jobs.get(id);
     if (job) {
-      this.jobs.set(id, { ...job, ...updates });
+      const updated = { ...job, ...updates };
+      this.jobs.set(id, updated);
+      return updated;
     }
+    return undefined;
   }
 }
 

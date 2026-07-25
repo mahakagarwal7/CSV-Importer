@@ -35,11 +35,11 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     });
   }
 
-  // Fallback 500 error
+  // Fallback 500 error with descriptive debugging feedback
   res.status(500).json({
     error: {
       code: 'INTERNAL_SERVER_ERROR',
-      message: 'An unexpected error occurred',
+      message: err?.message || 'An unexpected internal error occurred',
     },
   });
 };
