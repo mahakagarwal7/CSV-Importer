@@ -1,15 +1,12 @@
-import pino from 'pino';
-import { env } from '../config/env';
-
-export const logger = pino({
-  level: env.NODE_ENV === 'development' ? 'debug' : 'info',
-  transport:
-    env.NODE_ENV === 'development'
-      ? {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-          },
-        }
-      : undefined,
-});
+// Serverless-safe structured logger architecture
+// Bypasses multi-threaded transport crash issues (pino/sonic-boom/thread-stream) in @vercel/node single-file lambda packaging
+export const logger = {
+  info: (...args: any[]) => console.log('[INFO]', ...args),
+  error: (...args: any[]) => console.error('[ERROR]', ...args),
+  warn: (...args: any[]) => console.warn('[WARN]', ...args),
+  debug: (...args: any[]) => {
+    if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+      console.log('[DEBUG]', ...args);
+    }
+  },
+};
