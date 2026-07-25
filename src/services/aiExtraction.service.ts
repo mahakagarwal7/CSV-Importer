@@ -1,4 +1,3 @@
-import pLimit from 'p-limit';
 import { AIProvider } from '../providers/ai.provider.interface';
 import { chunkArray } from './batching.service';
 import { withRetry } from '../utils/retry';
@@ -6,7 +5,6 @@ import { postProcessBatch, PostProcessResult } from './postProcess.service';
 import { logger } from '../utils/logger';
 
 const BATCH_SIZE = 25; // ~20-30 rows per AI call
-const CONCURRENCY_LIMIT = 1; // Sequential API calls to protect Free Tier rate limits
 
 export interface ExtractionResult {
   validRecords: any[];
@@ -14,8 +12,6 @@ export interface ExtractionResult {
 }
 
 export class AIExtractionService {
-  private limit = pLimit(CONCURRENCY_LIMIT);
-
   constructor(private aiProvider: AIProvider) {}
 
   async processCsvData(
@@ -25,22 +21,18 @@ export class AIExtractionService {
     const batches = chunkArray(rows, BATCH_SIZE);
     logger.info(`Processing ${rows.length} rows in ${batches.length} batches.`);
 
-    const batchPromises = batches.map((batch, index) =>
-      this.limit(async () => {
-        // Polite 500ms inter-batch pause to keep requests per minute below quota trigger thresholds
-        if (index > 0) await new Promise(r => setTimeout(r, 500));
-        return this.processBatch(headers, batch, index);
-      })
-    );
-
-    const batchResults = await Promise.all(batchPromises);
-
     const finalResult: ExtractionResult = {
       validRecords: [],
       skippedRecords: [],
     };
 
-    for (const res of batchResults) {
+    // Sequential native async execution to preserve Free Tier quota limits without reliance on pure ESM third-party queue libraries (p-limit)
+    for (let index = 0; index < batches.length; index++) {
+      const batch = batches[index];
+      // Polite 500ms inter-batch throttle to avoid HTTP 429 quota exceedance
+      if (index > 0) await new Promise(r => setTimeout(r, 500));
+      
+      const res = await this.processBatch(headers, batch, index);
       finalResult.validRecords.push(...res.validRecords);
       finalResult.skippedRecords.push(...res.skippedRecords);
     }
