@@ -9,10 +9,13 @@ export class GeminiProvider implements AIProvider {
   private ai: GoogleGenAI;
 
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+    this.ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY || 'unconfigured_key_placeholder' });
   }
 
   async extractRecords(headers: string[], rows: Record<string, string>[]): Promise<AIExtractionResponse> {
+    if (!env.GEMINI_API_KEY || env.GEMINI_API_KEY === 'unconfigured_key_placeholder') {
+      throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your Vercel Project Environment Variables and redeploy.");
+    }
     const systemPrompt = getSystemPrompt();
     const userPrompt = getUserPrompt(headers, rows);
 
